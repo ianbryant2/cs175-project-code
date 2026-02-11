@@ -33,5 +33,5 @@ def extract_thinking_from_response(text: str) -> str:
 
 if __name__ == "__main__":
     processed_dataset = DATASET.map(format_prompt)
-    for key, value in processed_dataset[0].items():
-        print(f"{key}: {value}")
+    for i in range(10):
+        print(f"Prompt {i}: {processed_dataset[i]['question']}")
