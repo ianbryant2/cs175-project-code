@@ -3,7 +3,10 @@ import sqlite3
 from pathlib import Path
 from pprint import pformat
 
-def prompt(table_info : str, question : str):
+def system_prompt():
+    return """You are a helpful assistant that generates SQL queries based on the provided database schema and user questions."""
+
+def user_prompt(table_info : str, question : str):
     return f"""For the SQL database with the following schema:
 {table_info}
 What should be the query for the question: {question}"""
@@ -38,7 +41,10 @@ def preprocess_json(input_file, table_file, output_file):
             else:
                 raise ValueError(f"Table information for database {data_base} not found.")
             
-            data_point['prompt'] = prompt(pformat(data_point['table_info']), data_point['question'])
+            data_point['prompt'] = [
+                {'role': 'system', 'content': system_prompt()},
+                {'role': 'user', 'content': user_prompt(pformat(data_point['table_info']), data_point['question'])}
+            ]
 
             data_dump.append(data_point)
         except Exception as e:
