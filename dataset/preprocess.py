@@ -4,12 +4,12 @@ from pathlib import Path
 from pprint import pformat
 
 def system_prompt():
-    return """You are a helpful assistant that generates SQL queries based on the provided database schema and user questions."""
+    return """You are a SQL expert. Output only a valid and executable SQL in <sql> tags."""
 
 def user_prompt(table_info : str, question : str):
     return f"""For the SQL database with the following schema:
 {table_info}
-What should be the query for the question: {question}"""
+Create a query for the question: {question}"""
 
 def preprocess_json(input_file, table_file, output_file):
     with open(input_file, 'r') as f:
