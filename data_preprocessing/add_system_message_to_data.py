@@ -2,13 +2,7 @@ from datasets import load_dataset
 import re
 
 
-SYSTEM_MESSAGE = """You are an expert SQL generator.
-Given a database schema and a question, you must: 
-1. Reason about the query logic inside <think> tags.
-2. Only output the valid SQLite query inside <sql> tags.
-"""
-
-"""Default dataset has column named "question" for x value, which doesn't match with Huggingface's TRL library's expected "prompt" column."""
+SYSTEM_MESSAGE = """"You are a SQL expert. Output only a valid and executable SQL in <sql> tags."""
 DATASET = load_dataset("spider", split="train")
 
 
