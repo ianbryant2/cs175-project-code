@@ -21,8 +21,16 @@ def format_prompt(data_point: dict) -> dict:
     return {"prompt": messages}
 
 
-def extract_query_from_sql_tags(text: str) -> str:
+def extract_query_from_response(text: str) -> str:
     m = re.search(r"<sql>(.*?)</sql>", text, re.DOTALL /re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    
+    return text.strip()
+
+
+def extract_thinking_from_response(text: str) -> str:
+    m = re.search(r"<think>(.*?)</think>", text, re.DOTALL /re.IGNORECASE)
     if m:
         return m.group(1).strip()
     
