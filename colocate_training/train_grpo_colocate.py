@@ -12,6 +12,8 @@ dataset = load_dataset("json", data_files=data_files, split='train')
 training_args = GRPOConfig(
     use_vllm=True,
     vllm_mode='colocate'
+    report_to='wandb',
+    run_name='query_match_reward'
 )
 
 trainer = GRPOTrainer(
