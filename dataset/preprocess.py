@@ -30,21 +30,23 @@ def preprocess_json(input_file, table_file, output_file):
             list_rows = []
             
             for row in cursor.execute(data_point['query']):
-                list_rows.append(row)
+                list_rows.append(str(row))
             data_point['query_result'] = list_rows
             con.close()
 
             for table in table_data:
                 if table['db_id'] == data_base:
-                    data_point['table_info'] = table
+                    data_point['table_info'] = pformat(table)
                     break
             else:
                 raise ValueError(f"Table information for database {data_base} not found.")
             
             data_point['prompt'] = [
                 {'role': 'system', 'content': system_prompt()},
-                {'role': 'user', 'content': user_prompt(pformat(data_point['table_info']), data_point['question'])}
+                {'role': 'user', 'content': user_prompt(data_point['table_info'], data_point['question'])}
             ]
+
+            del data_point['sql']
 
             data_dump.append(data_point)
         except Exception as e:
