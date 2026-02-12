@@ -7,7 +7,7 @@ TRAIN_PATH = './preprocessed_data/train.json'
 TEST_PATH = './preprocessed_data/test.json'
 
 data_files = {'train': TRAIN_PATH, 'test': TEST_PATH}
-dataset = load_dataset("json", data_files=data_files)
+dataset = load_dataset("json", data_files=data_files, split='train')
 
 training_args = GRPOConfig(
     use_vllm=True,
