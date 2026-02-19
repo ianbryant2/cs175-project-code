@@ -8,6 +8,9 @@
 #SBATCH --mem-per-cpu=4G
 #SBATCH --gres=gpu:A30:4
 
-srun accelerate launch train_grpo_colocate.py
+source ~/.bashrc
+conda activate rl
+cd "$(dirname "$0")"
 
+srun python -m accelerate.commands.launch train_grpo_colocate.py
 
