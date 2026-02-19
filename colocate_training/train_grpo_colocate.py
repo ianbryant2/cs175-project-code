@@ -1,5 +1,4 @@
 # train_grpo.py
-import sys
 from pathlib import Path
 
 from datasets import load_dataset
@@ -7,9 +6,6 @@ from trl import GRPOTrainer, GRPOConfig
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
 from reward_funcs import execution_match_reward_func
 
 TRAIN_PATH = REPO_ROOT / "preprocessed_data/train.json"
