@@ -4,7 +4,7 @@ from pathlib import Path
 from pprint import pformat
 
 def system_prompt():
-    return """You are a SQL expert. Output only a valid and executable SQL in <sql> tags."""
+    return """You are a SQL expert. Output only a single valid and executable SQL in <sql> tags."""
 
 def user_prompt(table_info : str, question : str):
     return f"""For the SQL database with the following schema:
@@ -60,4 +60,8 @@ def preprocess_json(input_file, table_file, output_file):
 
 
 if __name__ == "__main__":
-    preprocess_json('./spider_data/test.json', './spider_data/test_tables.json', './spider_data/preprocessed/preprocessed_test_spider.json')
+    input_path = Path('./spider_data/test.json')
+    tables_path = Path('./spider_data/test_tables.json')
+    output_path = Path('./spider_data/preprocessed/preprocessed_test_spider.json')
+
+    preprocess_json(input_path, tables_path, output_path)

@@ -7,3 +7,4 @@ __pycache__/
 spider_data
 .envrc
 .venv
+dataset/spider_Data
