@@ -2,6 +2,7 @@ import re
 import os
 import sqlite3
 import sqlglot
+from pathlib import Path
 from difflib import SequenceMatcher
 import sqlparse
 
@@ -26,6 +27,33 @@ def query_match_reward_func(completions, query, **kwargs):
     return rewards
 
 
+"""Execute the generated query against the corresponding table and 
+give a score of 0/1, return a list of rewards"""
+def syntax_check_reward(completions, db_id, **kwargs):
+    rewards = []
+    for complete, database in zip(completions, db_id):
+        try:
+            extracted = extract_query_from_response(complete[0]['content'])
+            db_path = Path(os.path.join(DATABASE_BASE_DIRECTORY, database, f"{database}.sqlite"))
+            if not db_path.exists():
+                db_path = Path(os.path.join(DATABASE_BASE_DIRECTORY, database, f"{database}.db"))
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute(extracted)
+            conn.close()
+            rewards.append(1.0)
+            
+        except sqlite3.Error:
+            rewards.append(0.0)
+            
+        except Exception:
+            rewards.append(0.0)
+
+    return rewards
+
+
+"""Perform an N-Gram comparison between the LLM generated query and a 
+gold query and return a list of reward scores (0.0-1.0)"""
 def query_ngram_comparison_reward(completions, query_toks, **kwargs):
     rewards = []
     for complete, query_tok in zip(completions, query_toks):
@@ -67,6 +95,8 @@ def jaccard_similarity(set_a: set, set_b: set) -> float:
     return len(intersection) / len(union)
 
 
+"""Extract all the schema items from the generated query and the gold
+query and calculate the jaccard similarity, return a list of rewards"""
 def schema_linking_reward(completions, query, **kwargs):
     rewards = []
     for complete, q in zip(completions, query):

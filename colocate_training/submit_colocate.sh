@@ -5,12 +5,13 @@
 #SBATCH --ntasks=1
 #SBATCH --partition=gpu
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=128G
+#SBATCH --mem=64G
 #SBATCH --gres=gpu:A30:4
 
 module load cuda/12.2.0  
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_ALLOC_CONF=expandable_segments:True
 export WANDB_PROJECT="CS 175 Project LLM"
 export DS_BUILD_OPS=0
 export DS_SKIP_CUDA_CHECK=1
