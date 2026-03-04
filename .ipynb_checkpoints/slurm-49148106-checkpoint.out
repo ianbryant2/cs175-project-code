@@ -1,0 +1,74 @@
+2026-03-02 15:05:22.223713: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-03-02 15:05:22.762949: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-03-02 15:05:25.010585: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+  File "/data/class/cs175/vutt4/CS175Project/cs175-project-code/colocate_training/train_grpo_colocate.py", line 17
+    save_strategy="no"
+                  ^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+  File "/data/class/cs175/vutt4/CS175Project/cs175-project-code/colocate_training/train_grpo_colocate.py", line 17
+    save_strategy="no"
+                  ^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+  File "/data/class/cs175/vutt4/CS175Project/cs175-project-code/colocate_training/train_grpo_colocate.py", line 17
+    save_strategy="no"
+                  ^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+  File "/data/class/cs175/vutt4/CS175Project/cs175-project-code/colocate_training/train_grpo_colocate.py", line 17
+    save_strategy="no"
+                  ^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+E0302 15:05:27.119000 1102732 site-packages/torch/distributed/elastic/multiprocessing/api.py:882] failed (exitcode: 1) local_rank: 0 (pid: 1102830) of binary: /data/class/cs175/vutt4/.conda/envs/rl/bin/python3.11
+Traceback (most recent call last):
+  File "/data/class/cs175/vutt4/.conda/envs/rl/bin/accelerate", line 7, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/data/class/cs175/vutt4/.conda/envs/rl/lib/python3.11/site-packages/accelerate/commands/accelerate_cli.py", line 50, in main
+    args.func(args)
+  File "/data/class/cs175/vutt4/.conda/envs/rl/lib/python3.11/site-packages/accelerate/commands/launch.py", line 1266, in launch_command
+    deepspeed_launcher(args)
+  File "/data/class/cs175/vutt4/.conda/envs/rl/lib/python3.11/site-packages/accelerate/commands/launch.py", line 952, in deepspeed_launcher
+    distrib_run.run(args)
+  File "/data/class/cs175/vutt4/.conda/envs/rl/lib/python3.11/site-packages/torch/distributed/run.py", line 927, in run
+    elastic_launch(
+  File "/data/class/cs175/vutt4/.conda/envs/rl/lib/python3.11/site-packages/torch/distributed/launcher/api.py", line 156, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/class/cs175/vutt4/.conda/envs/rl/lib/python3.11/site-packages/torch/distributed/launcher/api.py", line 293, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+train_grpo_colocate.py FAILED
+------------------------------------------------------------
+Failures:
+[1]:
+  time      : 2026-03-02_15:05:27
+  host      : hpc3-gpu-24-05.local
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 1102831)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[2]:
+  time      : 2026-03-02_15:05:27
+  host      : hpc3-gpu-24-05.local
+  rank      : 2 (local_rank: 2)
+  exitcode  : 1 (pid: 1102832)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[3]:
+  time      : 2026-03-02_15:05:27
+  host      : hpc3-gpu-24-05.local
+  rank      : 3 (local_rank: 3)
+  exitcode  : 1 (pid: 1102833)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-03-02_15:05:27
+  host      : hpc3-gpu-24-05.local
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 1102830)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
