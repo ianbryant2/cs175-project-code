@@ -11,3 +11,4 @@ dataset/spider_Data
 .out
 model
 wandb
+out_file
