@@ -4,7 +4,11 @@ from pathlib import Path
 from pprint import pformat
 
 def system_prompt():
-    return """You are a SQL expert. Output only a single valid and executable SQL in <sql> tags."""
+    return """You are a Text-to-SQL generator.
+
+Rules:
+1. Analyze the Schema constraints and question in <think> tags.
+2.  Output a single, executable query in <sql> tags."""
 
 def user_prompt(table_info : str, question : str):
     return f"""For the SQL database with the following schema:
@@ -63,5 +67,9 @@ if __name__ == "__main__":
     input_path = Path('./spider_data/test.json')
     tables_path = Path('./spider_data/test_tables.json')
     output_path = Path('./spider_data/preprocessed/preprocessed_test_spider.json')
+
+    input_path = Path('./spider_data/train_spider.json')
+    tables_path = Path('./spider_data/tables.json')
+    output_path = Path('./spider_data/preprocessed/preprocessed_train_spider.json')
 
     preprocess_json(input_path, tables_path, output_path)
