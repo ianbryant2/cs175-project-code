@@ -8,4 +8,4 @@ deepspeed_config:
     overlap_comm: true
     reduce_scatter: true
     contiguous_gradients: true
-num_processes: 4
+num_processes: 2

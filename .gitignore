@@ -12,3 +12,4 @@ dataset/spider_Data
 model
 wandb
 out_file
+eval_output

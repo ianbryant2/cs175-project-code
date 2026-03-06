@@ -18,4 +18,4 @@ export DS_SKIP_CUDA_CHECK=1
 export TRITON_CACHE_DIR=/tmp/$USER/triton_cache
 export CUDA_HOME=$CUDA_DIR
 
-accelerate launch --config_file accelerate_config.yaml train_grpo_colocate.py
+srun accelerate launch --config_file accelerate_config.yaml train_grpo_colocate.py

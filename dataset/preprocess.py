@@ -68,8 +68,8 @@ if __name__ == "__main__":
     tables_path = Path('./spider_data/test_tables.json')
     output_path = Path('./spider_data/preprocessed/preprocessed_test_spider.json')
 
-    input_path = Path('./spider_data/train_spider.json')
-    tables_path = Path('./spider_data/tables.json')
-    output_path = Path('./spider_data/preprocessed/preprocessed_train_spider.json')
+    #input_path = Path('./spider_data/train_spider.json')
+    #tables_path = Path('./spider_data/tables.json')
+    #output_path = Path('./spider_data/preprocessed/preprocessed_train_spider.json')
 
     preprocess_json(input_path, tables_path, output_path)
