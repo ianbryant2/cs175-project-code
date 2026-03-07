@@ -1,140 +1,19 @@
 import re
-import os
 import sqlite3
 import sqlglot
+import sqlparse
 from pathlib import Path
 from difflib import SequenceMatcher
-import sqlparse
 from collections import Counter
 from contextlib import closing
 
 
-DATABASE_BASE_DIRECTORY = "dataset/spider_data/database"
-
-
-def extract_query_from_response(text: str) -> str:
-    m = re.search(r"<sql>(.*?)</sql>", text, re.DOTALL | re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-    
-    return text.strip()
-
-
-def query_match_reward_func(completions, query, **kwargs):
-    rewards = []
-    for complete, q in zip(completions, query):
-        extracted_query = extract_query_from_response(complete[0]['content'])
-        rewards.append(1.0 if extracted_query.strip() == q.strip() else 0.0)
-
-    return rewards
-
-
-"""Execute the generated query against the corresponding table and 
-give a score of 0/1, return a list of rewards"""
-def syntax_check_reward(completions, db_id, **kwargs):
-    rewards = []
-    for complete, database in zip(completions, db_id):
-        try:
-            extracted = extract_query_from_response(complete[0]['content'])
-            db_path = Path(os.path.join(DATABASE_BASE_DIRECTORY, database, f"{database}.sqlite"))
-            if not db_path.exists():
-                db_path = Path(os.path.join(DATABASE_BASE_DIRECTORY, database, f"{database}.db"))
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute(extracted)
-            conn.close()
-            rewards.append(1.0)
-            
-        except sqlite3.Error:
-            rewards.append(0.0)
-            
-        except Exception:
-            rewards.append(0.0)
-
-    return rewards
-
-
-"""Perform an N-Gram comparison between the LLM generated query and a 
-gold query and return a list of reward scores (0.0-1.0)"""
-def query_ngram_comparison_reward(completions, query_toks, **kwargs):
-    rewards = []
-    for complete, query_tok in zip(completions, query_toks):
-        try:
-            extracted_generated_query = extract_query_from_response(complete[0]['content'])
-            generated_tok = [str(token) for token in sqlparse.parse(extracted_generated_query)[0].flatten()\
-                         if not token.is_whitespace]
-    
-            similarity = SequenceMatcher(None, query_tok, generated_tok).ratio()
-            rewards.append(similarity)
-        except Exception as e:
-            rewards.append(0.0)
-
-    return rewards
-
-
-def extract_schema_items(sql: str, dialect="sqlite") -> set:
-    items = set()
-    try:
-        tree = sqlglot.parse_one(sql, dialect=dialect)
-        if tree is None:
-            return items
-        for table in tree.find_all(sqlglot.exp.Table):
-            if table.name:
-                items.add(table.name.lower())
-        for col in tree.find_all(sqlglot.exp.Column):
-            if col.name:
-                items.add(col.name.lower())
-    except Exception:
-        pass
-    return items
-
-
-def jaccard_similarity(set_a: set, set_b: set) -> float:
-    intersection = set_a & set_b
-    union = set_a | set_b
-    if not union:
-        return 0.0
-    return len(intersection) / len(union)
-
-
-"""Extract all the schema items from the generated query and the gold
-query and calculate the jaccard similarity, return a list of rewards"""
-def schema_linking_reward(completions, query, **kwargs):
-    rewards = []
-    for complete, q in zip(completions, query):
-        if not complete:
-            rewards.append(0.0)
-            continue
-        try:
-            extracted = extract_query_from_response(complete[0]['content'])
-            pred_schema_items = extract_schema_items(extracted)
-            query_schema_items = extract_schema_items(q)
-            rewards.append(jaccard_similarity(pred_schema_items, query_schema_items))
-
-        except:
-            rewards.append(0.0)
-
-    return rewards
-
-
-def execution_match_reward_func(completions, query_result, db_id, **kwargs):
-    rewards = []
-    for completion, gold_rows, db in zip(completions, query_result, db_id):
-        try:
-            sql = extract_query_from_response(completion[0]["content"])
-            db_path = Path(f"./spider_data/test_database/{db}/{db}.sqlite")
-            con = sqlite3.connect(db_path)
-            cur = con.cursor()
-            pred_rows = [str(r) for r in cur.execute(sql).fetchall()]
-            con.close()
-            rewards.append(1.0 if Counter(pred_rows) == Counter(gold_rows) else 0.0)
-        except Exception:
-            rewards.append(0.0)
-    return rewards
+DATABASE_BASE_DIRECTORY = Path("dataset/spider_data/database")
 
 
 def _get_db_path(db_id: str) -> Path:
-    base = Path(DATABASE_BASE_DIRECTORY) / db_id
+    """Resolves the database path for a given DB ID."""
+    base = DATABASE_BASE_DIRECTORY / db_id
     for ext in (".sqlite", ".db"):
         p = base / f"{db_id}{ext}"
         if p.exists():
@@ -142,59 +21,132 @@ def _get_db_path(db_id: str) -> Path:
     return Path()
 
 
-"""Execute gold_query and pred_query and calculate row similarity and column similarity scores"""
-def comprehensive_execution_reward_func(completions, query_result, query_result_columns, db_id, **kwargs):
+def extract_query_from_response(text: str) -> str:
+    """Extracts SQL from <sql> tags or returns the raw text."""
+    m = re.search(r"<sql>(.*?)</sql>", text, re.DOTALL | re.IGNORECASE)
+    return m.group(1).strip() if m else text.strip()
+
+
+def safe_execute_sql(db_id: str, query: str):
+    """
+    Executes SQL safely and returns rows, columns, and a success flag.
+    """
+    db_path = _get_db_path(db_id)
+    if not db_path.exists():
+        return [], set(), False
+
+    try:
+        with closing(sqlite3.connect(db_path, timeout=10)) as conn:
+            cur = conn.cursor()
+            cur.execute(query)
+            # Convert rows to strings for consistent comparison
+            rows = [str(r) for r in cur.fetchall()]
+            cols = {desc[0].lower() for desc in cur.description} if cur.description else set()
+            return rows, cols, True
+    except Exception:
+        return [], set(), False
+
+
+def extract_schema_items(sql: str, dialect="sqlite") -> set:
+    """Extracts table and column names using sqlglot."""
+    items = set()
+    try:
+        tree = sqlglot.parse_one(sql, dialect=dialect)
+        if tree:
+            for node in tree.find_all(sqlglot.exp.Table, sqlglot.exp.Column):
+                if node.name:
+                    items.add(node.name.lower())
+    except Exception:
+        pass
+    return items
+
+
+def jaccard_similarity(set_a: set, set_b: set) -> float:
+    union = set_a | set_b
+    return len(set_a & set_b) / len(union) if union else 0.0
+
+# ---------------- REWARD FUNCTIONS ----------------
+
+def syntax_check_reward(completions, db_id, **kwargs):
+    """
+    Reward: 1.0 if the SQL executes without error, 0.0 otherwise.
+    """
     rewards = []
-    for complete, gold_rows, gold_column_names, db in zip(completions, query_result, query_result_columns, db_id):
+    for complete, db in zip(completions, db_id):
+        extracted = extract_query_from_response(complete[0]['content'])
+        _, _, success = safe_execute_sql(db, extracted)
+        rewards.append(1.0 if success else 0.0)
+    return rewards
+
+
+def query_ngram_comparison_reward(completions, query_toks, **kwargs):
+    """
+    Reward: SequenceMatcher ratio between predicted and gold tokens.
+    """
+    rewards = []
+    for complete, gold_tok in zip(completions, query_toks):
         try:
-            pred_query = extract_query_from_response(complete[0]['content'])
-            db_path = _get_db_path(db)
-            with closing(sqlite3.connect(db_path)) as conn:
-                cur = conn.cursor()
-    
-                # Execute Generated Query
-                cur.execute(pred_query)
-                pred_rows = [str(r) for r in cur.fetchall()]
-                pred_cols = set([desc[0].lower() for desc in cur.description])
-    
-                # Get gold column names
-                gold_cols = set(gold_column_names) if gold_column_names else set()
-            
-
-            # Score 1: Structural Accuracy (Column)
-            if not gold_cols:
-                col_score = 0.0
-            else:
-                intersection = pred_cols.intersection(gold_cols)
-                union = pred_cols.union(gold_cols)
-                col_score = len(intersection) / len(union)
-            
-            # Score 2: Data Accuracy (Row)
-            pred_counter = Counter(pred_rows)
-            gold_counter = Counter(gold_rows)
-                         
-            # Intersection counts common elements including duplicates
-            # e.g., Gold={A:2}, Pred={A:1} -> Intersection={A:1}
-            intersection = pred_counter & gold_counter 
-            tp = sum(intersection.values()) # True Positives
-            
-            fp = sum((pred_counter - gold_counter).values()) # Extra rows (False Positives)
-            fn = sum((gold_counter - pred_counter).values()) # Missing rows (False Negatives)
-
-            if tp == 0:
-                row_score = 0.0
-            else:
-                precision = tp / (tp + fp)
-                recall = tp / (tp + fn)
-                row_score = 2 * (precision * recall) / (precision + recall)
-
-            # 4. Final Weighted Score
-            # You can adjust weights. 0.3 for columns (structure) and 0.7 for rows (content) is a good mix.
-            final_score = (0.3 * col_score) + (0.7 * row_score)
-            rewards.append(final_score)
-
+            extracted = extract_query_from_response(complete[0]['content'])
+            # Parse and flatten tokens, ignoring whitespace
+            pred_tok = [str(t) for t in sqlparse.parse(extracted)[0].flatten() if not t.is_whitespace]
+            rewards.append(SequenceMatcher(None, gold_tok, pred_tok).ratio())
         except Exception:
             rewards.append(0.0)
+    return rewards
+
+
+def schema_linking_reward(completions, query, **kwargs):
+    """
+    Reward: Jaccard similarity of tables/columns used in prediction vs gold.
+    """
+    rewards = []
+    for complete, gold_sql in zip(completions, query):
+        try:
+            extracted = extract_query_from_response(complete[0]['content'])
+            pred_items = extract_schema_items(extracted)
+            gold_items = extract_schema_items(gold_sql)
+            rewards.append(jaccard_similarity(pred_items, gold_items))
+        except Exception:
+            rewards.append(0.0)
+    return rewards
+
+
+def comprehensive_execution_reward_func(completions, query_result, query_result_columns, db_id, **kwargs):
+    """
+    Reward: Weighted score based on column match (structure) and row F1 score (content).
+    """
+    rewards = []
+    iterator = zip(completions, query_result, query_result_columns, db_id)
+    
+    for complete, gold_rows, gold_cols_list, db in iterator:
+        pred_query = extract_query_from_response(complete[0]['content'])
+        pred_rows, pred_cols, success = safe_execute_sql(db, pred_query)
+
+        if not success:
+            rewards.append(0.0)
+            continue
+
+        # Score 1: Column Overlap
+        gold_cols = set(gold_cols_list) if gold_cols_list else set()
+        col_score = jaccard_similarity(pred_cols, gold_cols)
+
+        # Score 2: Row Content F1 (using Counters for multisets)
+        pred_counter = Counter(pred_rows)
+        gold_counter = Counter(gold_rows)
+        
+        tp = sum((pred_counter & gold_counter).values())
+        fp = sum((pred_counter - gold_counter).values())
+        fn = sum((gold_counter - pred_counter).values())
+
+        if tp == 0:
+            row_score = 0.0
+        else:
+            precision = tp / (tp + fp)
+            recall = tp / (tp + fn)
+            row_score = 2 * (precision * recall) / (precision + recall)
+
+        # Final Weighted Score (30% Structure, 70% Content)
+        rewards.append((0.3 * col_score) + (0.7 * row_score))
 
     return rewards
-        
+    
