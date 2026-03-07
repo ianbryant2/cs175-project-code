@@ -18,7 +18,7 @@ training_args = GRPOConfig(
     save_strategy="no",
     vllm_mode='colocate',
     report_to='wandb',
-    run_name='testing_batch_size=6',
+    run_name='testing new data format and reward',
     per_device_train_batch_size=6,
 )
 

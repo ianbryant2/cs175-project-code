@@ -10,7 +10,6 @@ from contextlib import closing
 
 
 DATABASE_BASE_DIRECTORY = "dataset/spider_data/database"
-GOLD_CACHE = {}
 
 
 def extract_query_from_response(text: str) -> str:
@@ -144,29 +143,23 @@ def _get_db_path(db_id: str) -> Path:
 
 
 """Execute gold_query and pred_query and calculate row similarity and column similarity scores"""
-def comprehensive_execution_reward_func(completions, query, db_id, **kwargs):
+def comprehensive_execution_reward_func(completions, query_result, query_result_columns, db_id, **kwargs):
     rewards = []
-    for complete, gold_query, db in zip(completions, query, db_id):
+    for complete, gold_rows, gold_column_names, db in zip(completions, query_result, query_result_columns, db_id):
         try:
             pred_query = extract_query_from_response(complete[0]['content'])
             db_path = _get_db_path(db)
             with closing(sqlite3.connect(db_path)) as conn:
                 cur = conn.cursor()
     
-                #Execute Generated Query
+                # Execute Generated Query
                 cur.execute(pred_query)
                 pred_rows = [str(r) for r in cur.fetchall()]
                 pred_cols = set([desc[0].lower() for desc in cur.description])
     
-                # Execute Gold Query (to get ground truth structure)
-                cache_key = (db, gold_query)
-                if cache_key in GOLD_CACHE:
-                    gold_rows, gold_cols = GOLD_CACHE[cache_key]
-                else:
-                    cur.execute(gold_query)
-                    gold_rows = [str(r) for r in cur.fetchall()]
-                    gold_cols = set([desc[0].lower() for desc in cur.description])
-                    GOLD_CACHE[cache_key] = (gold_rows, gold_cols)
+                # Get gold column names
+                gold_cols = set(gold_column_names) if gold_column_names else set()
+            
 
             # Score 1: Structural Accuracy (Column)
             if not gold_cols:
@@ -204,15 +197,4 @@ def comprehensive_execution_reward_func(completions, query, db_id, **kwargs):
             rewards.append(0.0)
 
     return rewards
-
-
-            
-        
-
-
-    
-        
-        
-
-
         
