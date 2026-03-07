@@ -21,4 +21,4 @@ export PYTHONUNBUFFERED=1
 
 
 
-srun accelerate launch --num_processes=1 accelerated_evaluate.py
+srun accelerate launch --num_processes=1 evaluate_grpo.py
