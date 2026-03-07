@@ -1,0 +1,16 @@
+# Compiled Python files
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+*.swp
+spider_data
+.envr
+.venv
+dataset/spider_Data
+.out
+model
+wandb
+out_file
+eval_output
+.ipynb_checkpoints
