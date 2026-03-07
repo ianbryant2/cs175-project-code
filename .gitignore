@@ -5,7 +5,7 @@ __pycache__/
 *.pyo
 *.swp
 spider_data
-.envr
+.envrc
 .venv
 dataset/spider_Data
 .out
