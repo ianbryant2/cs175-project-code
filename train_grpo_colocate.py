@@ -16,7 +16,8 @@ from reward_funcs import (
 TRAIN_PATH = 'dataset/spider_data/preprocessed/preprocessed_train_spider.json'
 TEST_PATH = 'dataset/spider_data/preprocessed/preprocessed_test_spider.json'
 CACHE_DIR = 'dataset/spider_data/preprocessed/cached'
-RUN_NAME = 'All Reward Funcs Qwen3-.6B'
+MODEL_NAME = 'Qwen/Qwen3-0.6B'
+RUN_NAME = f'All Reward Funcs'
 MODEL_OUTPUT_PATH = 'base_model'
 
 
@@ -97,7 +98,7 @@ training_args = GRPOConfig(
     save_strategy="no",
     vllm_mode='colocate',
     report_to='wandb',
-    run_name=RUN_NAME,
+    run_name=f'{RUN_NAME} | Model: {MODEL_NAME}',
     per_device_train_batch_size=6,
     eval_strategy="no",
 )
@@ -115,7 +116,7 @@ eval_callback = EvalCallback(
 )
 
 trainer = GRPOTrainer(
-    model="Qwen/Qwen3-0.6B",
+    model=MODEL_NAME,
     # Training reward functions (used for GRPO policy gradient updates)
     reward_funcs=[
         schema_linking_reward,
