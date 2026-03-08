@@ -29,9 +29,6 @@ done
 # Sanitize model name for use in filenames (replace / with _)
 MODEL_SAFE=$(echo "$MODEL" | tr '/' '_')
 
-python3 preprocess.py -a -m "$MODEL" -o "preprocessed_train_${MODEL_SAFE}.json" -d train
-python3 preprocess.py -m "$MODEL" -o "preprocessed_test_${MODEL_SAFE}.json" -d test
-
 cd dataset
 
 if [ "$SKIP_REPROCESS" = false ]; then
