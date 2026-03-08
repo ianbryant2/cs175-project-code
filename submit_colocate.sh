@@ -46,5 +46,5 @@ cd ..
 
 srun accelerate launch --config_file accelerate_config.yaml train_grpo_colocate.py \
     --model "$MODEL" \
-    --train-path "spider_data/preprocessed/preprocessed_train_${MODEL_SAFE}.json" \
-    --test-path "spider_data/preprocessed/preprocessed_test_${MODEL_SAFE}.json"
+    --train-path "dataset/spider_data/preprocessed/preprocessed_train_${MODEL_SAFE}.json" \
+    --test-path "dataset/spider_data/preprocessed/preprocessed_test_${MODEL_SAFE}.json"
