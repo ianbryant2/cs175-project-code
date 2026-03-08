@@ -2,6 +2,7 @@
 from datasets import load_dataset
 from trl import GRPOTrainer, GRPOConfig
 from transformers import TrainerCallback, TrainerControl, TrainerState, TrainingArguments
+import torch
 from reward_funcs import (
     schema_linking_reward,
     query_ngram_comparison_reward,
@@ -39,14 +40,15 @@ class EvalEvery100StepsCallback(TrainerCallback):
     def on_step_end(self, args, state, control, **kwargs):
         if state.global_step > 0 and state.global_step % self.eval_steps == 0:
             print(f"\n[EvalCallback] Running evaluation at step {state.global_step}...")
-
             original_reward_funcs = self.trainer.reward_funcs
             original_reward_processing_classes = self.trainer.reward_processing_classes
             original_reward_func_names = self.trainer.reward_func_names
+            original_reward_weights = self.trainer.reward_weights
 
             self.trainer.reward_funcs = self.eval_reward_funcs
             self.trainer.reward_processing_classes = [None] * len(self.eval_reward_funcs)
             self.trainer.reward_func_names = [f.__name__ for f in self.eval_reward_funcs]
+            self.trainer.reward_weights = torch.ones(len(self.eval_reward_funcs))
 
             try:
                 metrics = self.trainer.evaluate(self.eval_dataset)
@@ -55,6 +57,7 @@ class EvalEvery100StepsCallback(TrainerCallback):
                 self.trainer.reward_funcs = original_reward_funcs
                 self.trainer.reward_processing_classes = original_reward_processing_classes
                 self.trainer.reward_func_names = original_reward_func_names
+                self.trainer.reward_weights = original_reward_weights
 
 
 training_args = GRPOConfig(
@@ -64,9 +67,9 @@ training_args = GRPOConfig(
     save_strategy="no",
     vllm_mode='colocate',
     report_to='wandb',
-    run_name=RUN_NAME
+    run_name=RUN_NAME,
     per_device_train_batch_size=6,
-    eval_strategy="no",
+    eval_strategy="no"
 )
 
 eval_reward_funcs = [
