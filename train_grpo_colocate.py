@@ -16,10 +16,12 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-m', '--model', type=str, help='Model name to use for chat template', default=None)
+parser.add_argument('--train-path', type=str, default='dataset/spider_data/preprocessed/preprocessed_train_spider.json')
+parser.add_argument('--test-path', type=str, default='dataset/spider_data/preprocessed/preprocessed_test_spider.json')
 args = parser.parse_args()
 
-TRAIN_PATH = 'dataset/spider_data/preprocessed/preprocessed_train_spider.json'
-TEST_PATH = 'dataset/spider_data/preprocessed/preprocessed_test_spider.json'
+TRAIN_PATH = args.train_path
+TEST_PATH = args.test_path
 CACHE_DIR = 'dataset/spider_data/preprocessed/cached'
 MODEL_NAME = args.model
 RUN_NAME = f'All Reward Funcs'
