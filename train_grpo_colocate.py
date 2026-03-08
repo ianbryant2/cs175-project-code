@@ -2,17 +2,17 @@
 from pathlib import Path
 from datasets import load_dataset, load_from_disk
 from trl import GRPOTrainer, GRPOConfig
-from transformers import TrainerCallback, TrainerControl, TrainerState, TrainingArguments
+from transformers import TrainerCallback
 import torch
+import argparse
+
+# Import the individual rewards for Eval, and the Scheduled class for Training
 from reward_funcs import (
-    schema_linking_reward,
-    query_ngram_comparison_reward,
-    syntax_check_reward,
+    ScheduledReward,
     comprehensive_execution_reward_func,
     subset_match_reward_func,
     execution_exact_match_reward_func,
 )
-import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-m', '--model', type=str, help='Model name to use for chat template', default=None)
@@ -64,10 +64,11 @@ class EvalCallback(TrainerCallback):
     call, then restores the original training reward functions afterward.
     """
 
-    def __init__(self, eval_dataset, eval_reward_funcs, eval_steps: int = 100):
+    def __init__(self, eval_dataset, eval_reward_funcs, eval_steps: int = 512):
         self.eval_dataset = eval_dataset
         self.eval_reward_funcs = eval_reward_funcs
         self.eval_steps = eval_steps
+        self.trainer = None
 
     def set_trainer(self, trainer):
         self.trainer = trainer
@@ -76,13 +77,16 @@ class EvalCallback(TrainerCallback):
         if state.global_step > 0 and state.global_step % self.eval_steps == 0:
             print(f"\n[EvalCallback] Running evaluation at step {state.global_step}...")
 
-            eval_subset = self.eval_dataset.shuffle(seed=state.global_step).select(range(100))
+            # Select a small random subset for evaluation speed
+            eval_subset = self.eval_dataset.shuffle(seed=state.global_step).select(range(512))
 
+            # Backup original training configuration
             original_reward_funcs = self.trainer.reward_funcs
             original_reward_processing_classes = self.trainer.reward_processing_classes
             original_reward_func_names = self.trainer.reward_func_names
             original_reward_weights = self.trainer.reward_weights
 
+            # Swap in the static evaluation rewards
             self.trainer.reward_funcs = self.eval_reward_funcs
             self.trainer.reward_processing_classes = [None] * len(self.eval_reward_funcs)
             self.trainer.reward_func_names = [f.__name__ for f in self.eval_reward_funcs]
@@ -92,6 +96,7 @@ class EvalCallback(TrainerCallback):
                 metrics = self.trainer.evaluate(eval_subset)
                 print(f"[EvalCallback] Step {state.global_step} metrics: {metrics}")
             finally:
+                # Restore the scheduled training reward
                 self.trainer.reward_funcs = original_reward_funcs
                 self.trainer.reward_processing_classes = original_reward_processing_classes
                 self.trainer.reward_func_names = original_reward_func_names
@@ -101,15 +106,20 @@ class EvalCallback(TrainerCallback):
 training_args = GRPOConfig(
     use_vllm=True,
     max_completion_length=512,
+    vllm_max_model_length=16384,
     output_dir=MODEL_OUTPUT_PATH,
     save_strategy="no",
     vllm_mode='colocate',
     report_to='wandb',
     run_name=f'{RUN_NAME} | Model: {MODEL_NAME}',
-    per_device_train_batch_size=6,
+    per_device_train_batch_size=4,
     eval_strategy="no",
 )
 
+# 1. Initialize the scheduled reward OBJECT
+scheduled_reward_func = ScheduledReward()
+
+# 2. Define the static evaluation rewards
 eval_reward_funcs = [
     comprehensive_execution_reward_func,
     subset_match_reward_func,
@@ -119,25 +129,21 @@ eval_reward_funcs = [
 eval_callback = EvalCallback(
     eval_dataset=eval_dataset,
     eval_reward_funcs=eval_reward_funcs,
-    eval_steps=500,
+    eval_steps=512,
 )
 
 trainer = GRPOTrainer(
     model=MODEL_NAME,
-    # Training reward functions (used for GRPO policy gradient updates)
-    reward_funcs=[
-        schema_linking_reward,
-        query_ngram_comparison_reward,
-        syntax_check_reward,
-        comprehensive_execution_reward_func,
-    ],
+    # Pass the object instance, not the class
+    reward_funcs=scheduled_reward_func,
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
     args=training_args,
     callbacks=[eval_callback],
 )
 
-# Give the callback a reference back to trainer so it can call trainer.evaluate()
+# 3. CRITICAL: Inject the trainer into the reward object so it can track progress
+scheduled_reward_func.set_trainer(trainer)
 eval_callback.set_trainer(trainer)
 
 print("Start training")
