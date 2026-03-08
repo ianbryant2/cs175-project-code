@@ -26,16 +26,25 @@ for arg in "$@"; do
     fi
 done
 
+# Sanitize model name for use in filenames (replace / with _)
+MODEL_SAFE=$(echo "$MODEL" | tr '/' '_')
+
+python3 preprocess.py -a -m "$MODEL" -o "preprocessed_train_${MODEL_SAFE}.json" -d train
+python3 preprocess.py -m "$MODEL" -o "preprocessed_test_${MODEL_SAFE}.json" -d test
+
 cd dataset
 
 if [ "$SKIP_REPROCESS" = false ]; then
     echo "Preprocessing datasets..."
-    python3 preprocess.py -a -m "$MODEL" -o preprocessed_train_spider.json -d train
-    python3 preprocess.py -m "$MODEL" -o preprocessed_test_spider.json -d test
+    python3 preprocess.py -a -m "$MODEL" -o "preprocessed_train_${MODEL_SAFE}.json" -d train
+    python3 preprocess.py -m "$MODEL" -o "preprocessed_test_${MODEL_SAFE}.json" -d test
 else
     echo "Skipping preprocessing (-r flag set)."
 fi
 
 cd ..
 
-srun accelerate launch --config_file accelerate_config.yaml train_grpo_colocate.py --model "$MODEL"
+srun accelerate launch --config_file accelerate_config.yaml train_grpo_colocate.py \
+    --model "$MODEL" \
+    --train-path "spider_data/preprocessed/preprocessed_train_${MODEL_SAFE}.json" \
+    --test-path "spider_data/preprocessed/preprocessed_test_${MODEL_SAFE}.json"
