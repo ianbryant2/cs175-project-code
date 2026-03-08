@@ -14,6 +14,7 @@ from reward_funcs import (
 TRAIN_PATH = 'dataset/spider_data/preprocessed/preprocessed_train_spider.json'
 TEST_PATH = 'dataset/spider_data/preprocessed/preprocessed_test_spider.json'
 MODEL_OUTPUT_PATH = 'base_model'
+RUN_NAME = 'All Rewards Qwen3-.6B'
 
 data_files = {'train': TRAIN_PATH, 'test': TEST_PATH}
 train_dataset = load_dataset("json", data_files=data_files, split='train')
@@ -35,24 +36,25 @@ class EvalEvery100StepsCallback(TrainerCallback):
     def set_trainer(self, trainer):
         self.trainer = trainer
 
-    def on_step_end(
-        self,
-        args: TrainingArguments,
-        state: TrainerState,
-        control: TrainerControl,
-        **kwargs,
-    ):
+    def on_step_end(self, args, state, control, **kwargs):
         if state.global_step > 0 and state.global_step % self.eval_steps == 0:
             print(f"\n[EvalCallback] Running evaluation at step {state.global_step}...")
 
             original_reward_funcs = self.trainer.reward_funcs
+            original_reward_processing_classes = self.trainer.reward_processing_classes
+            original_reward_func_names = self.trainer.reward_func_names
+
             self.trainer.reward_funcs = self.eval_reward_funcs
+            self.trainer.reward_processing_classes = [None] * len(self.eval_reward_funcs)
+            self.trainer.reward_func_names = [f.__name__ for f in self.eval_reward_funcs]
 
             try:
                 metrics = self.trainer.evaluate(self.eval_dataset)
                 print(f"[EvalCallback] Step {state.global_step} metrics: {metrics}")
             finally:
                 self.trainer.reward_funcs = original_reward_funcs
+                self.trainer.reward_processing_classes = original_reward_processing_classes
+                self.trainer.reward_func_names = original_reward_func_names
 
 
 training_args = GRPOConfig(
@@ -62,9 +64,9 @@ training_args = GRPOConfig(
     save_strategy="no",
     vllm_mode='colocate',
     report_to='wandb',
-    run_name='testing new data format and reward',
+    run_name=RUN_NAME
     per_device_train_batch_size=6,
-    evaluation_strategy="no",
+    eval_strategy="no",
 )
 
 eval_reward_funcs = [
