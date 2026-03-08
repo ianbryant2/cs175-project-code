@@ -12,11 +12,16 @@ from reward_funcs import (
     subset_match_reward_func,
     execution_exact_match_reward_func,
 )
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-m', '--model', type=str, help='Model name to use for chat template', default=None)
+args = parser.parse_args()
 
 TRAIN_PATH = 'dataset/spider_data/preprocessed/preprocessed_train_spider.json'
 TEST_PATH = 'dataset/spider_data/preprocessed/preprocessed_test_spider.json'
 CACHE_DIR = 'dataset/spider_data/preprocessed/cached'
-MODEL_NAME = 'Qwen/Qwen3-0.6B'
+MODEL_NAME = args.model
 RUN_NAME = f'All Reward Funcs'
 MODEL_OUTPUT_PATH = 'base_model'
 
