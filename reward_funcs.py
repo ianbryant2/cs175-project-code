@@ -149,4 +149,121 @@ def comprehensive_execution_reward_func(completions, query_result, query_result_
         rewards.append((0.3 * col_score) + (0.7 * row_score))
 
     return rewards
+
+
+def _training_progress(trainer_state) -> float:
+    """
+    Returns normalized training progress in [0, 1].
+    """
+    if trainer_state is None:
+        return 0.0
+
+    max_steps = getattr(trainer_state, "max_steps", None)
+    global_step = getattr(trainer_state, "global_step", 0)
+
+    if isinstance(max_steps, int) and max_steps > 0:
+        return min(max(global_step / max_steps, 0.0), 1.0)
+
+    return 0.0
+
+
+def _scheduled_weights(progress: float):
+    """
+    Three-phase reward schedule:
+    - Early: emphasize syntax/schema/token similarity.
+    - Mid: shift weight toward execution.
+    - Late: prioritize execution correctness.
+    """
+    if progress < 0.10:
+        return {
+            "schema": 0.30,
+            "ngram": 0.25,
+            "syntax": 0.35,
+            "execution": 0.10,
+        }
+    if progress < 0.40:
+        return {
+            "schema": 0.20,
+            "ngram": 0.20,
+            "syntax": 0.20,
+            "execution": 0.40,
+        }
+    return {
+        "schema": 0.10,
+        "ngram": 0.10,
+        "syntax": 0.10,
+        "execution": 0.70,
+    }
+
+
+def _coerce_rewards(component, n):
+    """
+    Ensures reward components are length-n float lists.
+    """
+    if component is None:
+        return [0.0] * n
+
+    values = []
+    for i in range(n):
+        if i < len(component) and component[i] is not None:
+            try:
+                values.append(float(component[i]))
+            except Exception:
+                values.append(0.0)
+        else:
+            values.append(0.0)
+    return values
+
+
+def scheduled_sql_reward(completions, trainer_state=None, **kwargs):
+    """
+    Meta-reward wrapper that schedules weights across training.
+    """
+    n = len(completions)
+    progress = _training_progress(trainer_state)
+    weights = _scheduled_weights(progress)
+
+    query = kwargs.get("query")
+    query_toks = kwargs.get("query_toks")
+    query_result = kwargs.get("query_result")
+    query_result_columns = kwargs.get("query_result_columns")
+    db_id = kwargs.get("db_id")
+
+    schema_component = None
+    if query is not None:
+        schema_component = schema_linking_reward(completions, query=query)
+
+    ngram_component = None
+    if query_toks is not None:
+        ngram_component = query_ngram_comparison_reward(completions, query_toks=query_toks)
+
+    syntax_component = None
+    if db_id is not None:
+        syntax_component = syntax_check_reward(completions, db_id=db_id)
+
+    execution_component = None
+    if query_result is not None and query_result_columns is not None and db_id is not None:
+        execution_component = comprehensive_execution_reward_func(
+            completions,
+            query_result=query_result,
+            query_result_columns=query_result_columns,
+            db_id=db_id,
+        )
+
+    schema_rewards = _coerce_rewards(schema_component, n)
+    ngram_rewards = _coerce_rewards(ngram_component, n)
+    syntax_rewards = _coerce_rewards(syntax_component, n)
+    execution_rewards = _coerce_rewards(execution_component, n)
+
+    combined = []
+    for i in range(n):
+        reward = (
+            weights["schema"] * schema_rewards[i]
+            + weights["ngram"] * ngram_rewards[i]
+            + weights["syntax"] * syntax_rewards[i]
+            + weights["execution"] * execution_rewards[i]
+        )
+        combined.append(reward)
+
+    return combined
     

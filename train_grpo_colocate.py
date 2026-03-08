@@ -1,7 +1,7 @@
 # train_grpo.py
 from datasets import load_dataset
 from trl import GRPOTrainer, GRPOConfig
-from reward_funcs import schema_linking_reward, query_ngram_comparison_reward, syntax_check_reward, comprehensive_execution_reward_func
+from reward_funcs import scheduled_sql_reward
 
 TRAIN_PATH = 'dataset/spider_data/preprocessed/preprocessed_train_spider.json'
 TEST_PATH = 'dataset/spider_data/preprocessed/preprocessed_test_spider.json'
@@ -25,7 +25,7 @@ training_args = GRPOConfig(
 
 trainer = GRPOTrainer(
     model="Qwen/Qwen3-0.6B",
-    reward_funcs=[schema_linking_reward, query_ngram_comparison_reward, syntax_check_reward, comprehensive_execution_reward_func],
+    reward_funcs=scheduled_sql_reward,
     train_dataset=dataset,
     args=training_args
 )
