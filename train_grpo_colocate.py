@@ -1,14 +1,58 @@
 # train_grpo.py
 from datasets import load_dataset
 from trl import GRPOTrainer, GRPOConfig
-from reward_funcs import schema_linking_reward, query_ngram_comparison_reward, syntax_check_reward, comprehensive_execution_reward_func
+from transformers import TrainerCallback, TrainerControl, TrainerState, TrainingArguments
+from reward_funcs import (
+    schema_linking_reward,
+    query_ngram_comparison_reward,
+    syntax_check_reward,
+    comprehensive_execution_reward_func,
+    subset_match_reward_func,
+    execution_exact_match_reward_func,
+)
 
 TRAIN_PATH = 'dataset/spider_data/preprocessed/preprocessed_train_spider.json'
 TEST_PATH = 'dataset/spider_data/preprocessed/preprocessed_test_spider.json'
 MODEL_OUTPUT_PATH = 'base_model'
 
 data_files = {'train': TRAIN_PATH, 'test': TEST_PATH}
-dataset = load_dataset("json", data_files=data_files, split='train')
+train_dataset = load_dataset("json", data_files=data_files, split='train')
+eval_dataset = load_dataset("json", data_files=data_files, split='test')
+
+
+class EvalEvery100StepsCallback(TrainerCallback):
+    """
+    Runs trainer.evaluate() every `eval_steps` training steps.
+    Temporarily swaps in eval-specific reward functions during the evaluate()
+    call, then restores the original training reward functions afterward.
+    """
+
+    def __init__(self, eval_dataset, eval_reward_funcs, eval_steps: int = 100):
+        self.eval_dataset = eval_dataset
+        self.eval_reward_funcs = eval_reward_funcs
+        self.eval_steps = eval_steps
+
+    def set_trainer(self, trainer):
+        self.trainer = trainer
+
+    def on_step_end(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ):
+        if state.global_step > 0 and state.global_step % self.eval_steps == 0:
+            print(f"\n[EvalCallback] Running evaluation at step {state.global_step}...")
+
+            original_reward_funcs = self.trainer.reward_funcs
+            self.trainer.reward_funcs = self.eval_reward_funcs
+
+            try:
+                metrics = self.trainer.evaluate(self.eval_dataset)
+                print(f"[EvalCallback] Step {state.global_step} metrics: {metrics}")
+            finally:
+                self.trainer.reward_funcs = original_reward_funcs
 
 
 training_args = GRPOConfig(
@@ -20,15 +64,37 @@ training_args = GRPOConfig(
     report_to='wandb',
     run_name='testing new data format and reward',
     per_device_train_batch_size=6,
+    evaluation_strategy="no",
 )
 
+eval_reward_funcs = [
+    comprehensive_execution_reward_func,
+    subset_match_reward_func,
+    execution_exact_match_reward_func,
+]
+
+eval_callback = EvalEvery100StepsCallback(
+    eval_dataset=eval_dataset,
+    eval_reward_funcs=eval_reward_funcs,
+    eval_steps=100,
+)
 
 trainer = GRPOTrainer(
     model="Qwen/Qwen3-0.6B",
-    reward_funcs=[schema_linking_reward, query_ngram_comparison_reward, syntax_check_reward, comprehensive_execution_reward_func],
-    train_dataset=dataset,
-    args=training_args
+    reward_funcs=[
+        schema_linking_reward,
+        query_ngram_comparison_reward,
+        syntax_check_reward,
+        comprehensive_execution_reward_func,
+    ],
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset,
+    args=training_args,
+    callbacks=[eval_callback],
 )
+
+eval_callback.set_trainer(trainer)
+
 print("Start training")
 trainer.train()
 trainer.save_model(MODEL_OUTPUT_PATH)
