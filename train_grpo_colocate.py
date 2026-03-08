@@ -1,5 +1,6 @@
 # train_grpo.py
-from datasets import load_dataset
+from pathlib import Path
+from datasets import load_dataset, load_from_disk
 from trl import GRPOTrainer, GRPOConfig
 from transformers import TrainerCallback, TrainerControl, TrainerState, TrainingArguments
 import torch
@@ -14,15 +15,41 @@ from reward_funcs import (
 
 TRAIN_PATH = 'dataset/spider_data/preprocessed/preprocessed_train_spider.json'
 TEST_PATH = 'dataset/spider_data/preprocessed/preprocessed_test_spider.json'
+CACHE_DIR = 'dataset/spider_data/preprocessed/cached'
+RUN_NAME = 'All Reward Funcs Qwen3-.6B'
 MODEL_OUTPUT_PATH = 'base_model'
-RUN_NAME = 'All Rewards Qwen3-.6B'
-
-data_files = {'train': TRAIN_PATH, 'test': TEST_PATH}
-train_dataset = load_dataset("json", data_files=data_files, split='train')
-eval_dataset = load_dataset("json", data_files=data_files, split='test')
 
 
-class EvalEvery100StepsCallback(TrainerCallback):
+def load_or_cache(train_path, test_path, cache_dir):
+    """
+    On first run: loads from JSON and saves an Arrow cache to disk.
+    On subsequent runs: loads directly from the Arrow cache (much faster).
+    """
+    cache = Path(cache_dir)
+    train_cache = cache / 'train'
+    test_cache = cache / 'test'
+
+    if train_cache.exists() and test_cache.exists():
+        print("Loading datasets from Arrow cache...")
+        train_ds = load_from_disk(str(train_cache))
+        test_ds = load_from_disk(str(test_cache))
+    else:
+        print("Cache not found — loading from JSON and building cache...")
+        cache.mkdir(parents=True, exist_ok=True)
+        data_files = {'train': train_path, 'test': test_path}
+        train_ds = load_dataset("json", data_files=data_files, split='train')
+        test_ds = load_dataset("json", data_files=data_files, split='test')
+        train_ds.save_to_disk(str(train_cache))
+        test_ds.save_to_disk(str(test_cache))
+        print("Cache saved.")
+
+    return train_ds, test_ds
+
+
+train_dataset, eval_dataset = load_or_cache(TRAIN_PATH, TEST_PATH, CACHE_DIR)
+
+
+class EvalCallback(TrainerCallback):
     """
     Runs trainer.evaluate() every `eval_steps` training steps.
     Temporarily swaps in eval-specific reward functions during the evaluate()
@@ -40,6 +67,9 @@ class EvalEvery100StepsCallback(TrainerCallback):
     def on_step_end(self, args, state, control, **kwargs):
         if state.global_step > 0 and state.global_step % self.eval_steps == 0:
             print(f"\n[EvalCallback] Running evaluation at step {state.global_step}...")
+
+            eval_subset = self.eval_dataset.shuffle(seed=state.global_step).select(range(100))
+
             original_reward_funcs = self.trainer.reward_funcs
             original_reward_processing_classes = self.trainer.reward_processing_classes
             original_reward_func_names = self.trainer.reward_func_names
@@ -51,7 +81,7 @@ class EvalEvery100StepsCallback(TrainerCallback):
             self.trainer.reward_weights = torch.ones(len(self.eval_reward_funcs))
 
             try:
-                metrics = self.trainer.evaluate(self.eval_dataset)
+                metrics = self.trainer.evaluate(eval_subset)
                 print(f"[EvalCallback] Step {state.global_step} metrics: {metrics}")
             finally:
                 self.trainer.reward_funcs = original_reward_funcs
@@ -69,7 +99,7 @@ training_args = GRPOConfig(
     report_to='wandb',
     run_name=RUN_NAME,
     per_device_train_batch_size=6,
-    eval_strategy="no"
+    eval_strategy="no",
 )
 
 eval_reward_funcs = [
@@ -78,14 +108,15 @@ eval_reward_funcs = [
     execution_exact_match_reward_func,
 ]
 
-eval_callback = EvalEvery100StepsCallback(
+eval_callback = EvalCallback(
     eval_dataset=eval_dataset,
     eval_reward_funcs=eval_reward_funcs,
-    eval_steps=100,
+    eval_steps=500,
 )
 
 trainer = GRPOTrainer(
     model="Qwen/Qwen3-0.6B",
+    # Training reward functions (used for GRPO policy gradient updates)
     reward_funcs=[
         schema_linking_reward,
         query_ngram_comparison_reward,
@@ -98,6 +129,7 @@ trainer = GRPOTrainer(
     callbacks=[eval_callback],
 )
 
+# Give the callback a reference back to trainer so it can call trainer.evaluate()
 eval_callback.set_trainer(trainer)
 
 print("Start training")
