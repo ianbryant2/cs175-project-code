@@ -178,8 +178,7 @@ training_args = GRPOConfig(
     run_name=f'{RUN_NAME} | Model: {MODEL_NAME}',
     per_device_train_batch_size=4,
     eval_strategy="no",
-    seed=SEED,
-    vllm_server_kwargs={"seed": SEED}
+    seed=SEED
 )
 
 
