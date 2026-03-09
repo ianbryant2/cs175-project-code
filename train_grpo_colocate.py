@@ -27,7 +27,7 @@ TEST_PATH = args.test_path
 CACHE_DIR = 'dataset/spider_data/preprocessed/cached'
 MODEL_NAME = args.model
 RUN_NAME = f'All Reward Funcs w/ Scheduling'
-MODEL_OUTPUT_PATH = 'base_model'
+MODEL_OUTPUT_PATH = f'base_model/{RUN_NAME.replace(' ', '').replace('/', '')}'
 SEED = 42
 
 
