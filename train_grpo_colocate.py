@@ -8,7 +8,9 @@ import argparse
 
 # Import the individual rewards for Eval, and the Scheduled class for Training
 from reward_funcs import (
-    ScheduledReward,
+    query_ngram_comparison_reward,
+    syntax_check_reward,
+    schema_linking_reward,
     comprehensive_execution_reward_func,
     subset_match_reward_func,
     execution_exact_match_reward_func,
@@ -102,6 +104,67 @@ class EvalCallback(TrainerCallback):
                 self.trainer.reward_func_names = original_reward_func_names
                 self.trainer.reward_weights = original_reward_weights
 
+class PiecewiseRewardWeightScheduler(TrainerCallback):
+    """
+    Updates trainer.args.reward_weights each step according to a piecewise
+    schedule, while individual reward functions remain separate (so their
+    unweighted scores are logged to W&B individually by GRPOTrainer).
+
+    SCHEDULE: list of (progress, [w0, w1, ...]) breakpoints.
+              Weights are linearly interpolated between breakpoints.
+              progress is in [0.0, 1.0].
+    """
+
+    # One weight per reward function, in the same order as reward_funcs=[]
+    # (schema, ngram, syntax, execution)
+    SCHEDULE = [
+        (0.00, [0.30, 0.25, 0.35, 0.10]),
+        (0.10, [0.30, 0.25, 0.35, 0.10]),  # end of early phase
+        (0.40, [0.20, 0.20, 0.20, 0.40]),  # end of mid phase
+        (1.00, [0.10, 0.10, 0.10, 0.70]),  # end of late phase
+    ]
+
+    def __init__(self, log_weights: bool = True):
+        self.log_weights = log_weights
+        self._pending_log = {}
+
+    def _get_weights(self, progress: float) -> list:
+        schedule = self.SCHEDULE
+
+        if progress <= schedule[0][0]:
+            return list(schedule[0][1])
+        if progress >= schedule[-1][0]:
+            return list(schedule[-1][1])
+
+        for i in range(len(schedule) - 1):
+            t0, w0 = schedule[i]
+            t1, w1 = schedule[i + 1]
+            if t0 <= progress <= t1:
+                alpha = (progress - t0) / (t1 - t0)
+                return [w0[j] + alpha * (w1[j] - w0[j]) for j in range(len(w0))]
+
+        return list(schedule[-1][1])
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        progress = (
+            state.global_step / state.max_steps
+            if state.max_steps > 0 else 0.0
+        )
+        new_weights = self._get_weights(progress)
+        args.reward_weights = new_weights
+
+        if self.log_weights:
+            reward_names = ["schema", "ngram", "syntax", "execution"]
+            self._pending_log = {
+                f"reward_weight/{name}": w
+                for name, w in zip(reward_names, new_weights)
+            }
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if self.log_weights and self._pending_log and logs is not None:
+            logs.update(self._pending_log)
+            self._pending_log = {}
+
 
 training_args = GRPOConfig(
     use_vllm=True,
@@ -116,10 +179,7 @@ training_args = GRPOConfig(
     eval_strategy="no",
 )
 
-# 1. Initialize the scheduled reward OBJECT
-scheduled_reward_func = ScheduledReward()
 
-# 2. Define the static evaluation rewards
 eval_reward_funcs = [
     comprehensive_execution_reward_func,
     subset_match_reward_func,
@@ -132,18 +192,22 @@ eval_callback = EvalCallback(
     eval_steps=512,
 )
 
+weight_callback = PiecewiseRewardWeightScheduler()
+
 trainer = GRPOTrainer(
     model=MODEL_NAME,
-    # Pass the object instance, not the class
-    reward_funcs=scheduled_reward_func,
+    reward_funcs=[
+        schema_linking_reward,       
+        query_ngram_comparison_reward,
+        syntax_check_reward,
+        comprehensive_execution_reward_func,
+    ],
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
     args=training_args,
-    callbacks=[eval_callback],
+    callbacks=[eval_callback, weight_callback],
 )
 
-# 3. CRITICAL: Inject the trainer into the reward object so it can track progress
-scheduled_reward_func.set_trainer(trainer)
 eval_callback.set_trainer(trainer)
 
 print("Start training")
