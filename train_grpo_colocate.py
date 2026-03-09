@@ -106,65 +106,51 @@ class EvalCallback(TrainerCallback):
                 self.trainer.reward_weights = original_reward_weights
 
 class PiecewiseRewardWeightScheduler(TrainerCallback):
-    """
-    Updates trainer.args.reward_weights each step according to a piecewise
-    schedule, while individual reward functions remain separate (so their
-    unweighted scores are logged to W&B individually by GRPOTrainer).
-
-    SCHEDULE: list of (progress, [w0, w1, ...]) breakpoints.
-              Weights are linearly interpolated between breakpoints.
-              progress is in [0.0, 1.0].
-    """
-
-    # One weight per reward function, in the same order as reward_funcs=[]
-    # (schema, ngram, syntax, execution)
     SCHEDULE = [
         (0.00, [0.30, 0.25, 0.35, 0.10]),
-        (0.10, [0.30, 0.25, 0.35, 0.10]),  # end of early phase
-        (0.40, [0.20, 0.20, 0.20, 0.40]),  # end of mid phase
-        (1.00, [0.10, 0.10, 0.10, 0.70]),  # end of late phase
+        (0.10, [0.30, 0.25, 0.35, 0.10]),
+        (0.40, [0.20, 0.20, 0.20, 0.40]),
+        (1.00, [0.10, 0.10, 0.10, 0.70]),
     ]
 
     def __init__(self, log_weights: bool = True):
         self.log_weights = log_weights
-        self._pending_log = {}
+        self.trainer = None 
+
+    def set_trainer(self, trainer):
+        self.trainer = trainer
 
     def _get_weights(self, progress: float) -> list:
         schedule = self.SCHEDULE
-
         if progress <= schedule[0][0]:
             return list(schedule[0][1])
         if progress >= schedule[-1][0]:
             return list(schedule[-1][1])
-
         for i in range(len(schedule) - 1):
             t0, w0 = schedule[i]
             t1, w1 = schedule[i + 1]
             if t0 <= progress <= t1:
                 alpha = (progress - t0) / (t1 - t0)
                 return [w0[j] + alpha * (w1[j] - w0[j]) for j in range(len(w0))]
-
         return list(schedule[-1][1])
 
     def on_step_begin(self, args, state, control, **kwargs):
-        progress = (
-            state.global_step / state.max_steps
-            if state.max_steps > 0 else 0.0
-        )
+        if self.trainer is None:
+            return
+
+        progress = state.global_step / state.max_steps if state.max_steps > 0 else 0.0
         new_weights = self._get_weights(progress)
-        args.reward_weights = new_weights
+
+        self.trainer.reward_weights = torch.tensor(
+            new_weights, dtype=torch.float32, device=self.trainer.reward_weights.device
+        )
 
         if self.log_weights:
             reward_names = ["schema", "ngram", "syntax", "execution"]
-            self._pending_log = {
+            self.trainer.log({
                 f"reward_weight/{name}": w
                 for name, w in zip(reward_names, new_weights)
-            }
-
-    def on_log(self, args, state, control, logs=None, **kwargs):
-        if self.log_weights and self._pending_log and logs is not None:
-            logs.update(self._pending_log)
-            self._pending_log = {}
+            })
 
 
 training_args = GRPOConfig(
@@ -211,6 +197,7 @@ trainer = GRPOTrainer(
 )
 
 eval_callback.set_trainer(trainer)
+weight_callback.set_trainer(trainer)
 
 set_seed(training_args.seed)
 
