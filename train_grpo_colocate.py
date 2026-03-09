@@ -26,7 +26,7 @@ TRAIN_PATH = args.train_path
 TEST_PATH = args.test_path
 CACHE_DIR = 'dataset/spider_data/preprocessed/cached'
 MODEL_NAME = args.model
-RUN_NAME = f'All Reward Funcs'
+RUN_NAME = f'All Reward Funcs w/ Scheduling'
 MODEL_OUTPUT_PATH = 'base_model'
 SEED = 42
 
@@ -162,7 +162,7 @@ training_args = GRPOConfig(
     vllm_mode='colocate',
     report_to='wandb',
     run_name=f'{RUN_NAME} | Model: {MODEL_NAME}',
-    per_device_train_batch_size=4,
+    per_device_train_batch_size=6,
     eval_strategy="no",
     seed=SEED
 )
