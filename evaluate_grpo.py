@@ -1,18 +1,15 @@
 from datasets import load_dataset
 from trl import GRPOTrainer, GRPOConfig
+import argparse
 
 
 from reward_funcs import comprehensive_execution_reward_func, subset_match_reward_func, execution_exact_match_reward_func
 
-MODEL_PATH = "base_model"
-TEST_DATA_PATH = "dataset/spider_data/preprocessed/preprocessed_test_spider.json"
-DATABASE_BASE_DIRECTORY = "dataset/spider_data/test_database"
+
 MAX_WORKERS = 16  # Adjust based on CPU cores (matches your cpus-per-task)
-
-
     
-def evaluate():
-    dataset = load_dataset("json", data_files={'train': TEST_DATA_PATH}, split='train')
+def evaluate(model_path, test_path, run_name):
+    dataset = load_dataset("json", data_files={'train': test_path}, split='train')
 
     # Evaluating config
     training_args = GRPOConfig(
@@ -21,14 +18,14 @@ def evaluate():
         use_vllm=True,
         vllm_mode='colocate', # Ensures vLLM shares the GPU with the main process
         report_to='wandb',
-        run_name='Evaluate baseline',
+        run_name=run_name,
         per_device_eval_batch_size=16, # Default is often 8, bumping this is critical
         
         dataloader_num_workers=8,
     )
 
     trainer = GRPOTrainer(
-        model=MODEL_PATH,
+        model=model_path,
         reward_funcs=[comprehensive_execution_reward_func, subset_match_reward_func, execution_exact_match_reward_func],
         args=training_args,
         train_dataset=dataset,
@@ -40,4 +37,10 @@ def evaluate():
 
 
 if __name__ == "__main__":
-    evaluate()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model-path', type=str, help='Model Path', default=None)
+    parser.add_argument('--run-name', type=str, help='Run Name', default=None)
+    parser.add_argument('--test-path', type=str, default=None)
+    args = parser.parse_args()
+
+    evaluate(args.model_path, args.test_path, args.run_name)

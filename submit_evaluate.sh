@@ -21,4 +21,4 @@ export PYTHONUNBUFFERED=1
 
 
 
-srun accelerate launch --num_processes=1 evaluate_grpo.py
+srun accelerate launch --num_processes=1 evaluate_grpo.py --model-path "model_path" --test-path "test_path" --run_name "run_name"
