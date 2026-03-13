@@ -15,6 +15,9 @@ TEST_DATABASE_BASE_DIRECTORY = Path("dataset/spider_data/test_database")
 
 # ---------------- HELPER FUNCTIONS ----------------
 
+def sanitize_sql(sql: str) -> str:
+    return sql.encode("ascii", errors="ignore").decode("ascii")
+
 def get_completion_text(complete) -> str:
     """Handle both string completions and message-dict completions."""
     if isinstance(complete, str):
@@ -29,7 +32,7 @@ def get_completion_text(complete) -> str:
 def extract_query_from_response(text: str) -> str:
     """Extracts SQL from <sql> tags or returns the raw text."""
     m = re.search(r"<sql>(.*?)</sql>", text, re.DOTALL | re.IGNORECASE)
-    return m.group(1).strip() if m else text.strip()
+    return sanitize_sql(m.group(1).strip() if m else text.strip())
 
 
 @lru_cache(maxsize=None)
