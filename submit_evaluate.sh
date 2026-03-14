@@ -19,6 +19,23 @@ export TRITON_CACHE_DIR=/tmp/$USER/triton_cache
 export CUDA_HOME=$CUDA_DIR
 export PYTHONUNBUFFERED=1
 
+MODEL_PATH=${1:?"Usage: sbatch submit_evaluate.sh <model_path> [num_splits]"}
+NUM_SPLITS=${2:-5}
 
+for i in $(seq 1 "$NUM_SPLITS"); do
+    TEST_PATH="dataset/spider_data/preprocessed/preprocessed_split_${i}.json"
+    RUN_NAME="Eval | Model: ${MODEL_PATH} | Split ${i}"
+
+    if [ ! -f "$TEST_PATH" ]; then
+        echo "Missing $TEST_PATH, skipping split $i"
+        continue
+    fi
+
+    echo "Evaluating split $i with $TEST_PATH"
+    srun accelerate launch --num_processes=1 evaluate_grpo.py \
+        --model-path "$MODEL_PATH" \
+        --test-path "$TEST_PATH" \
+        --run-name "$RUN_NAME"
+done
 
 srun accelerate launch --num_processes=1 evaluate_grpo.py --model-path "model_path" --test-path "test_path" --run_name "run_name"
