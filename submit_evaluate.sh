@@ -12,18 +12,19 @@ module load cuda/12.2.0
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export PYTORCH_ALLOC_CONF=expandable_segments:True
-export WANDB_PROJECT="CS 175 Project LLM"
+export WANDB_PROJECT="CS 175 Project LLM Eval"
 export WANDB_API_KEY="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"
 export DS_SKIP_CUDA_CHECK=1
 export TRITON_CACHE_DIR=/tmp/$USER/triton_cache
 export CUDA_HOME=$CUDA_DIR
 export PYTHONUNBUFFERED=1
 
-MODEL_PATH=${1:?"Usage: sbatch submit_evaluate.sh <model_path> [num_splits]"}
-NUM_SPLITS=${2:-5}
+MODEL_PATH=${1:?"Usage: sbatch submit_evaluate.sh <model_path> <split_dir>"}
+SPLIT_DIR=${2:?"Usage: sbatch submit_evaluate.sh <model_path> <split_dir>"}
+NUM_SPLITS=$(ls "${SPLIT_DIR}"/*.json 2>/dev/null | wc -l)
 
 for i in $(seq 1 "$NUM_SPLITS"); do
-    TEST_PATH="dataset/spider_data/preprocessed/preprocessed_split_${i}.json"
+    TEST_PATH="${SPLIT_DIR}/${i}.json"
     RUN_NAME="Eval | Model: ${MODEL_PATH} | Split ${i}"
 
     if [ ! -f "$TEST_PATH" ]; then
@@ -37,5 +38,3 @@ for i in $(seq 1 "$NUM_SPLITS"); do
         --test-path "$TEST_PATH" \
         --run-name "$RUN_NAME"
 done
-
-srun accelerate launch --num_processes=1 evaluate_grpo.py --model-path "model_path" --test-path "test_path" --run_name "run_name"

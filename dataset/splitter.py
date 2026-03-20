@@ -34,7 +34,8 @@ def split_preprocessed_train_by_query_toks(num_partitions: int,input_path: Path 
     base_size = total // num_partitions
     remainder = total % num_partitions
 
-    output_dir = input_path.parent
+    output_dir = input_path.parent / input_path.stem
+    output_dir.mkdir(parents=True, exist_ok=True)
     written_files: list[Path] = []
 
     start = 0
@@ -43,7 +44,7 @@ def split_preprocessed_train_by_query_toks(num_partitions: int,input_path: Path 
         end = start + part_size
         split_chunk = sorted_data[start:end]
 
-        output_path = output_dir / f"preprocessed_split_{i + 1}.json"
+        output_path = output_dir / f"{i + 1}.json"
         with output_path.open("w") as f:
             json.dump(split_chunk, f, indent=4)
 
@@ -61,5 +62,10 @@ if __name__ == "__main__":
         type=int,
         help="Number of partitions to split preprocessed_train_spider.json into.",
     )
+    parser.add_argument(
+        "input_path",
+        type=str,
+        help="Path to file containing preprocessed data"
+    )
     args = parser.parse_args()
-    split_preprocessed_train_by_query_toks(args.num_partitions)
+    split_preprocessed_train_by_query_toks(args.num_partitions, input_path=Path(args.input_path))
